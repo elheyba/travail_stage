@@ -31,15 +31,15 @@ int max(int a, int b)
 }
 
 /**
- * @brief Calculate the euclidean distance between {r,g,b} and {R,G,B}
+* @brief Calculate the Euclidean distance between two RGB colors.
  *
- * @param r red
- * @param g green
- * @param b blue
- * @param R Red
- * @param G Green
- * @param B Blue
- * @return distance between {r,g,b} and {R,G,B}
+ * @param r Red component of the first color
+ * @param g Green component of the first color
+ * @param b Blue component of the first color
+ * @param R Red component of the second color
+ * @param G Green component of the second color
+ * @param B Blue component of the second color
+ * @return Euclidean distance between the two colors
  */
 int distance(int r, int g, int b, int R, int G, int B)
 {
@@ -47,11 +47,11 @@ int distance(int r, int g, int b, int R, int G, int B)
 }
 
 /**
- * @brief Calculate the index of the closest center from the color
+ * @brief Calculate the index of the closest center from a given color.
  *
- * @param color Color of the pixel
- * @param centers All the centers
- * @return index of the closest center
+ * @param color Color of the pixel in RGB format (Vec3b)
+ * @param centers Matrix containing the center colors (in RGB format)
+ * @return Index of the closest center
  */
 int closestCenter(Vec3b color, Mat centers)
 {
@@ -86,11 +86,12 @@ int closestCenter(Vec3b color, Mat centers)
 // ------------------------------------------------------------------------------------------------------------------------
 
 /**
- * @brief Calculate the k-means of the vect
+ * @brief Perform k-means clustering on the given image matrix.
  *
- * @param vect
- * @param k
- * @return Centers of vect
+ * @param sourceMatrix The original image matrix.
+ * @param vect Matrix containing the pixel colors (in RGB format) to cluster.
+ * @param k Number of clusters.
+ * @return Matrix containing the cluster centers (in RGB format).
  */
 Mat kmeans(Mat sourceMatrix, Mat vect, int k)
 {
@@ -173,18 +174,18 @@ struct Vec3fCompare {
 
 
 /**
-* @brief Calcule la distance chromatique entre deux pixels et met à jour les matrices de moyennes et de comptages.
+* @brief Computes the chromatic distance between two pixels and updates the mean and count matrices.
  * 
- * @param s_i Indice de la ligne du premier pixel.
- * @param s_j Indice de la colonne du premier pixel.
- * @param d_i Indice de la ligne du deuxième pixel.
- * @param d_j Indice de la colonne du deuxième pixel.
- * @param matIMG Pointeur vers la matrice de l'image contenant les valeurs des pixels.
- * @param matMOY Pointeur vers la matrice contenant les valeurs moyennes des pixels.
- * @param matCOUNT Pointeur vers la matrice contenant les comptages des pixels.
- * @param hc Seuil chromatique pour la distance.
- * @return float La distance chromatique entre les deux pixels si elle est inférieure au seuil, sinon 0.
- */
+ * @param s_i Row index of the first pixel.
+ * @param s_j Column index of the first pixel.
+ * @param d_i Row index of the second pixel.
+ * @param d_j Column index of the second pixel.
+ * @param matIMG Pointer to the image matrix containing pixel values.
+ * @param matMOY Pointer to the matrix containing mean pixel values.
+ * @param matCOUNT Pointer to the matrix containing pixel counts.
+ * @param hc Chromatic threshold for distance.
+ * @return float Chromatic distance between the two pixels if below the threshold, otherwise 0.
+*/
 float compute(int s_i, int s_j, int d_i, int d_j, Mat *matIMG, Mat *matMOY, Mat *matCOUNT, double hc)
 {
     Vec3f centre = matIMG->at<Vec3f>(s_i, s_j);
@@ -207,13 +208,13 @@ float compute(int s_i, int s_j, int d_i, int d_j, Mat *matIMG, Mat *matMOY, Mat 
 }
 
 /**
- * @brief Vérifie si la norme euclidienne de tous les éléments de la matrice (M1 - M2) est inférieure à epsilon.
+ * @brief Checks if the Euclidean norm of all elements of the matrix (M1 - M2) is below epsilon.
  * 
- * @param M1 Première matrice.
- * @param M2 Deuxième matrice.
- * @param epsilon Seuil de tolérance.
- * @return false Si tous les éléments de la matrice de différence sont inférieurs à epsilon.
- * @return true Sinon.
+ * @param M1 First matrix.
+ * @param M2 Second matrix.
+ * @param epsilon Tolerance threshold.
+ * @return true If any element in the difference matrix exceeds epsilon.
+ * @return false If all elements in the difference matrix are below epsilon.
  */
 bool isDifferenceBelowEpsilon(const Mat M1, const Mat M2, double epsilon)
 {
@@ -260,14 +261,14 @@ bool isDifferenceBelowEpsilon(const Mat M1, const Mat M2, double epsilon)
 
 
 /**
- * @brief Calcule les clusters de pixels en utilisant l'algorithme mean shift.
+ * @brief Perform mean shift clustering on the given image matrix.
  * 
- * @param hs Seuil spatiale.
- * @param hc Seuil chromatique.
- * @param eps Tolérance pour la convergence (non utilisé dans cette implémentation).
- * @param itMax Nombre maximal d'itérations.
- * @param matIMG Matrice de l'image contenant les valeurs des pixels.
- * @return Mat Matrice de l'image segmentée après application de l'algorithme mean shift.
+ * @param hs Spatial threshold.
+ * @param hc Chromatic threshold.
+ * @param eps Convergence tolerance (not used in this implementation).
+ * @param itMax Maximum number of iterations.
+ * @param matIMG Image matrix to be processed.
+ * @return Mat Segmented image matrix after mean shift clustering.
  */
 Mat meanshift(uint hs, double hc, double eps, uint itMax, Mat matIMG)
 {
@@ -335,11 +336,14 @@ Mat meanshift(uint hs, double hc, double eps, uint itMax, Mat matIMG)
 }
 
 /**
- * @brief Détecte les modes (maximums locaux) dans l'image segmentée.
+* @brief Detects modes (local maxima) in the segmented image.
  * 
- * @param matIMG Matrice de l'image segmentée après application de l'algorithme mean shift.
- * @param eps Tolérance pour la convergence.
- * @return vector<Vec3f> Liste des modes détectés.
+ * This function scans each pixel of the segmented image to detect modes, which are values of color that appear most frequently or are close to values already detected. 
+ * Modes are stored in a vector and sorted based on their frequency of appearance.
+ * 
+ * @param matIMG Matrix of the segmented image after applying the mean shift algorithm.
+ * @param eps Tolerance for convergence, indicating the maximum distance to consider two pixels as the same mode.
+ * @return vector<Vec3f> List of detected modes, sorted by descending frequency.
  */
 vector<Vec3f> detectModes(const Mat& matIMG, double eps)
 {
@@ -354,26 +358,35 @@ vector<Vec3f> detectModes(const Mat& matIMG, double eps)
         {
             Vec3f pixel = matIMG.at<Vec3f>(i, j);
             bool found = false;
+            float minDist = std::numeric_limits<float>::max();
+            Vec3f closestMode;
 
             // Cherche si ce pixel est proche d'un mode existant
             #pragma omp critical
             {
                 for (const auto& mode : modes)
                 {
-                    if (cv::norm(mode - pixel) < eps)
+                    float dist = cv::norm(mode - pixel);
+                    if (dist < minDist)
                     {
-                        modeMap[mode]++;
-                        found = true;
-                        break;
+                        minDist = dist;
+                        closestMode = mode;
                     }
                 }
 
-                // Si aucun mode proche n'est trouvé, ajoute ce pixel comme un nouveau mode
-                if (!found)
+                // Si un mode proche est trouvé dans la tolérance, l'associer
+                if (minDist < eps)
                 {
+                    modeMap[closestMode]++;
+                    found = true;
+                }
+                else
+                {
+                    // Sinon, ajouter ce pixel comme un nouveau mode
                     modes.push_back(pixel);
                     modeMap[pixel] = 1;
                 }
+
             }
         }
     }
@@ -387,12 +400,14 @@ vector<Vec3f> detectModes(const Mat& matIMG, double eps)
 }
 
 /**
- * @brief Attribue des labels aux pixels en fonction des modes détectés.
+ * @brief Assigns labels to pixels based on detected modes.
  * 
- * @param matIMG Matrice de l'image segmentée après application de l'algorithme mean shift.
- * @param modes Liste des modes détectés.
- * @param eps Tolérance pour la convergence.
- * @return Mat Matrice contenant les labels des pixels.
+ * This function traverses each pixel of the segmented image and assigns it the label of the nearest mode. The result is an image where each pixel is replaced by the color of the closest mode.
+ * 
+ * @param matIMG Matrix of the segmented image after applying the mean shift algorithm.
+ * @param modes List of detected modes, where each mode represents a color.
+ * @param eps Tolerance for convergence (not used in this function).
+ * @return Mat Matrix containing the pixel labels, where each pixel is replaced by the color of the closest mode.
  */
 Mat labelPixels(const Mat& matIMG, const vector<Vec3f>& modes)
 {
@@ -431,11 +446,11 @@ Mat labelPixels(const Mat& matIMG, const vector<Vec3f>& modes)
 
 // ------------------------------------------------------------------------------------------------------------------------
 /**
- * @brief Calculate the euclidean distance between two 5-channel vectors
- *
- * @param v1 First 5-channel vector
- * @param v2 Second 5-channel vector
- * @return distance between v1 and v2
+ * @brief Calculates the Euclidean distance between two 5-channel vectors.
+ * 
+ * @param a First 5-channel vector.
+ * @param b Second 5-channel vector.
+ * @return The Euclidean distance between `a` and `b`.
  */
 int distance5(const Vec<float, 5>& a, const Vec<float, 5>& b)
 {
@@ -447,11 +462,11 @@ int distance5(const Vec<float, 5>& a, const Vec<float, 5>& b)
 }
 
 /**
- * @brief Calculate the index of the closest center from the vector
- *
- * @param vec 5-channel vector
- * @param centers All the centers
- * @return index of the closest center
+ * @brief Calculates the index of the closest center from a 5-channel vector.
+ * 
+ * @param sample 5-channel vector for which to find the closest center.
+ * @param centers List of all centers.
+ * @return Index of the closest center in `centers`.
  */
 int closestCenter5(const Vec<float, 5>& sample, const vector<Vec<float, 5>>& centers)
 {
@@ -472,11 +487,13 @@ int closestCenter5(const Vec<float, 5>& sample, const vector<Vec<float, 5>>& cen
 
 
 /**
- * @brief Calculate the k-means of the vect
- *
- * @param vect
- * @param k
- * @return Centers of vect
+ * @brief Executes the k-means algorithm for 5-channel vectors.
+ * 
+ * This function partitions the input vectors into `k` clusters by minimizing the intra-cluster distance. It returns the centers of the clusters.
+ * 
+ * @param samples Vector containing the 5-channel vectors to be clustered.
+ * @param k Number of clusters.
+ * @return vector<Vec<float, 5>> Centers of the `k` clusters.
  */
 vector<Vec<float, 5>> kmeans5(const vector<Vec<float, 5>>& samples, int k)
 {
@@ -529,14 +546,16 @@ vector<Vec<float, 5>> kmeans5(const vector<Vec<float, 5>>& samples, int k)
 }
 
 /**
- * @brief Calculate the superpixels of the matIMG
+ * @brief Calculates superpixels of the image using the k-means algorithm.
  * 
- * @param img 
- * @param k 
- * @param m 
- * @param itMax 
- * @param labels
- * @param centers 
+ * This function converts the image to CIE Lab color space, then runs k-means to segment the image into `k` superpixels. Pixel labels are computed, and the centers of the superpixels are returned.
+ * 
+ * @param matIMG Input image in BGR format.
+ * @param k Number of superpixels to generate.
+ * @param m Scaling factor for pixel positions.
+ * @param itMax Maximum number of iterations for k-means.
+ * @param labels Output matrix containing the pixel labels.
+ * @param centers Output matrix containing the centers of the superpixels.
  */
 void superpixel(const Mat &matIMG, int k, int m, int itMax, Mat &labels, Mat &centers) {
     // Convertir l'image en espace de couleur CIE Lab
