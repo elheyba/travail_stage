@@ -102,6 +102,11 @@ Mat kmeans(Mat sourceMatrix, Mat vect, int k)
     {
         centers.at<Vec3f>(i) = vect.at<Vec3f>(i * vect.rows / k);
     }
+    // Affichage du type de données
+    PRINT_MAT_INFO(vect);
+    PRINT_MAT_INFO(sourceMatrix);
+
+
 
     int it = 0;
     int it_max = 20000;
@@ -136,23 +141,25 @@ Mat kmeans(Mat sourceMatrix, Mat vect, int k)
         }
 
 
-        Mat resultMatrix = sourceMatrix.clone();
+        //Mat resultMatrix = sourceMatrix.clone();
+        Mat resultMatrix(sourceMatrix.size(), CV_8UC3);
         // Loop for each pixel
         for (int i = 0; i < resultMatrix.rows; i++)
         {
             for (int j = 0; j < resultMatrix.cols; j++)
             {
                 Vec3b color = sourceMatrix.at<Vec3b>(i, j);
-
-                int closest = closestCenter(color, centers);
-
-                // Set pixel color to the color of the closest center
-                resultMatrix.at<Vec3b>(i, j) = centers.at<Vec3b>(closest);
+                int closest = closestCenter(Vec3f(color[0], color[1], color[2]), centers);
+                resultMatrix.at<Vec3b>(i, j) = Vec3b(centers.at<Vec3f>(closest)[0],
+                                                     centers.at<Vec3f>(closest)[1],
+                                                     centers.at<Vec3f>(closest)[2]);
             }
         }
+
+        
         
         imshow("kmeans result", resultMatrix);
-        waitKey(1000);  // Attendre un peu pour la mise à jour de l'affichage
+        waitKey(100);  // Attendre un peu pour la mise à jour de l'affichage
 
     } while (it++ < it_max && sum(centers != prevCenters) != Scalar(0, 0, 0, 0));
     cout << "kmeans terminé en " << it << " itérations." << endl << endl;
@@ -619,6 +626,43 @@ void superpixel(const Mat &matIMG, int k, int m, int itMax, Mat &labels, Mat &ce
     // Convertir l'image segmentée de Lab à BGR
     cvtColor(result, result, COLOR_Lab2BGR);
 
+
+    // Filtrer les valeurs NaN et infinies dans centers
+    Mat colors;
+
+    // Convertir colors pour K-means
+    result.convertTo(colors, CV_32F);
+    // reshape the image into a 1D array, for kmeans
+    Mat color_reshaped = colors.reshape(3, 1);
+    
+
+    // Appliquer K-means pour la binarisation
+    Mat labelsKMeans;
+    PRINT_MAT_INFO(centers);
+    PRINT_MAT_INFO(color_reshaped);
+    Mat centersKMeans=kmeans(result, color_reshaped, 2);
+    Mat resultbinary(result.size(), CV_8UC3);
+        // Loop for each pixel
+        for (int i = 0; i < resultbinary.rows; i++)
+        {
+            for (int j = 0; j < resultbinary.cols; j++)
+            {
+                Vec3b color = result.at<Vec3b>(i, j);
+                int closest = closestCenter(Vec3f(color[0], color[1], color[2]), centersKMeans);
+                resultbinary.at<Vec3b>(i, j) = Vec3b(centersKMeans.at<Vec3f>(closest)[0],
+                                                     centersKMeans.at<Vec3f>(closest)[1],
+                                                     centersKMeans.at<Vec3f>(closest)[2]);
+            }
+        }
+    
+    stringstream ss1, ss2;
+    ss1 << "superpixel_" << k << ".png";
+    ss2 << "binary_superpixel" << k << ".png";
+    string outputFile1 = ss1.str();
+    string outputFile2 = ss2.str();
+    imwrite(outputFile1, result);
+    imwrite(outputFile2, resultbinary);
+
     // Afficher le résultat
     imshow("Superpixel Segmentation", result);
     waitKey(0);
@@ -775,7 +819,7 @@ int main(int argc, char **argv)
         {
             Vec3b color = sourceMatrix.at<Vec3b>(i, j);
 
-            int closest = closestCenter(color, centers);
+            int closest = closestCenter(Vec3f(color[0], color[1], color[2]), centers);
 
             // Set pixel color to the color of the closest center
             // (Or black/white if we are using a trust image)
@@ -789,7 +833,9 @@ int main(int argc, char **argv)
             }
             else
             {
-                resultMatrix.at<Vec3b>(i, j) = centers.at<Vec3b>(closest);
+                resultMatrix.at<Vec3b>(i, j) = Vec3b(centers.at<Vec3f>(closest)[0],
+                                                 centers.at<Vec3f>(closest)[1],
+                                                 centers.at<Vec3f>(closest)[2]);
             }
 
             // Increment counters for the quality evaluations
@@ -855,22 +901,24 @@ int main(int argc, char **argv)
     //it 23
     int ite = 100;
 
-    Mat msMatrix = meanshift(hs, hc, eps, ite, sourceMatrix32f);
+    //Mat msMatrix = meanshift(hs, hc, eps, ite, sourceMatrix32f);
     // Détection des modes
     //texture3 et 11 bonnes avec 80
     //tex8 => 35
-    vector<Vec3f> modes = detectModes(msMatrix, 80);
+    //vector<Vec3f> modes = detectModes(msMatrix, 80);
 
     // Attribution des labels
-    Mat label = labelPixels(msMatrix, modes);
-    Mat msMatrixU;
-    label.convertTo(msMatrixU, CV_8U);
+    //Mat label = labelPixels(msMatrix, modes);
+    //Mat msMatrixU;
+    //label.convertTo(msMatrixU, CV_8U);
 
     // Nom du fichier de sortie
-    //string outputFile = "result.png";
+    //stringstream ss;
+    //ss << "kmeans_" << k << "_classes.png";
+    //string outputFile = ss.str();
 
     // Enregistrer l'image binaire résultante
-    //imwrite(outputFile, msMatrixU);
+    //imwrite(outputFile, resultMatrix);
 
     // create image windows
     namedWindow("Source", cv::WINDOW_AUTOSIZE);
@@ -890,7 +938,7 @@ int main(int argc, char **argv)
         imshow("Trust", trustMatrix);
         imshow("Diff", diffMatrix);
     }
-    imshow("Mean Shift", msMatrixU);
+    //imshow("Mean Shift", msMatrixU);
 
 
 
@@ -898,16 +946,15 @@ int main(int argc, char **argv)
     //while (waitKey(0) != 113);
 
     // compute superpixels for the image 
-    waitKey(0);
+    //waitKey(0);
     // Initialize variables for superpixel function
     Mat labels_sup, centers_sup;
     // Paramètres
     int m = 10;
-    int maxIter = 10;
-    int k_sup=100;
+    int k_sup=200;
 
     // Call the superpixel function
-    superpixel(sourceMatrix_sup, k_sup, 10, 50, labels_sup, centers_sup);
+    superpixel(sourceMatrix_sup, k_sup, m, 50, labels_sup, centers_sup);
 
 
 
