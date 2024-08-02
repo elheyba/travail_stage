@@ -9,6 +9,7 @@
 #include <cmath>
 #include <vector>
 #include <map>
+#include <numeric> // Include for std::accumulate
 
 using namespace cv;
 using namespace std;
@@ -700,7 +701,7 @@ int main(int argc, char **argv)
     }
 
     // trust file used ?
-    bool useTrust = !groundTruthFilename.empty() && k == 2;
+    bool useTrust = !groundTruthFilename.empty();
 
     // just for debugging
     {
@@ -739,158 +740,252 @@ int main(int argc, char **argv)
     Mat resultMatrix = sourceMatrix.clone();
     Mat diffMatrix = trustMatrix.clone();
 
-    // Some usefull colors
-    Vec3b white(255, 255, 255);
-    Vec3b black(0, 0, 0);
-    Vec3b red(255, 0, 0);
-    Vec3b blue(0, 0, 255);
-
-    Vec3b colorMaj, colorMin;
-    if (useTrust)
+    if(k==2)
+    
     {
-        // Count the number of pixel per class in the trust matrix
-        int n = 0, p = 0;
-        for (int i = 0; i < trustMatrix.rows; i++)
+        // Some usefull colors
+        Vec3b white(255, 255, 255);
+        Vec3b black(0, 0, 0);
+        Vec3b red(255, 0, 0);
+        Vec3b blue(0, 0, 255);
+
+        Vec3b colorMaj, colorMin;
+        if (useTrust)
         {
-            for (int j = 0; j < trustMatrix.cols; j++)
+            // Count the number of pixel per class in the trust matrix
+            int n = 0, p = 0;
+            for (int i = 0; i < trustMatrix.rows; i++)
             {
-                if (trustMatrix.at<Vec3b>(i, j) == white)
+                for (int j = 0; j < trustMatrix.cols; j++)
                 {
-                    n++;
+                    if (trustMatrix.at<Vec3b>(i, j) == white)
+                    {
+                        n++;
+                    }
+                    else
+                    {
+                        p++;
+                    }
                 }
-                else
+            }
+
+            // Assign black/white to colorMaj/colorMin
+            if (n > p)
+            {
+                colorMaj = white;
+                colorMin = black;
+            }
+            else
+            {
+                colorMaj = black;
+                colorMin = white;
+            }
+
+            // Count the number of pixel per class in the source matrix
+            n = 0;
+            p = 0;
+            for (int i = 0; i < resultMatrix.rows; i++)
+            {
+                for (int j = 0; j < resultMatrix.cols; j++)
                 {
-                    p++;
+                    Vec3b color = sourceMatrix.at<Vec3b>(i, j);
+                    int closest = closestCenter(color, centers);
+                    if (closest == 0)
+                    {
+                        n++;
+                    }
+                    else
+                    {
+                        p++;
+                    }
                 }
+            }
+
+            // Reorganize centers to match with the trust matrix
+            if (n < p)
+            {
+                Vec3f tmp = centers.at<Vec3f>(0);
+                centers.at<Vec3f>(0) = centers.at<Vec3f>(1);
+                centers.at<Vec3f>(1) = tmp;
             }
         }
 
-        // Assign black/white to colorMaj/colorMin
-        if (n > p)
-        {
-            colorMaj = white;
-            colorMin = black;
-        }
-        else
-        {
-            colorMaj = black;
-            colorMin = white;
-        }
+        // Quality counters
+        float TP = 0;
+        float FP = 0;
+        float TN = 0;
+        float FN = 0;
 
-        // Count the number of pixel per class in the source matrix
-        n = 0;
-        p = 0;
+        // Loop for each pixel
         for (int i = 0; i < resultMatrix.rows; i++)
         {
             for (int j = 0; j < resultMatrix.cols; j++)
             {
                 Vec3b color = sourceMatrix.at<Vec3b>(i, j);
-                int closest = closestCenter(color, centers);
-                if (closest == 0)
+
+                int closest = closestCenter(Vec3f(color[0], color[1], color[2]), centers);
+
+                // Set pixel color to the color of the closest center
+                // (Or black/white if we are using a trust image)
+                if (useTrust && closest == 0)
                 {
-                    n++;
+                    resultMatrix.at<Vec3b>(i, j) = colorMaj;
+                }
+                else if (useTrust && closest == 1)
+                {
+                    resultMatrix.at<Vec3b>(i, j) = colorMin;
                 }
                 else
                 {
-                    p++;
+                    resultMatrix.at<Vec3b>(i, j) = Vec3b(centers.at<Vec3f>(closest)[0],
+                                                    centers.at<Vec3f>(closest)[1],
+                                                    centers.at<Vec3f>(closest)[2]);
                 }
-            }
-        }
 
-        // Reorganize centers to match with the trust matrix
-        if (n < p)
-        {
-            Vec3f tmp = centers.at<Vec3f>(0);
-            centers.at<Vec3f>(0) = centers.at<Vec3f>(1);
-            centers.at<Vec3f>(1) = tmp;
-        }
-    }
-
-    // Quality counters
-    float TP = 0;
-    float FP = 0;
-    float TN = 0;
-    float FN = 0;
-
-    // Loop for each pixel
-    for (int i = 0; i < resultMatrix.rows; i++)
-    {
-        for (int j = 0; j < resultMatrix.cols; j++)
-        {
-            Vec3b color = sourceMatrix.at<Vec3b>(i, j);
-
-            int closest = closestCenter(Vec3f(color[0], color[1], color[2]), centers);
-
-            // Set pixel color to the color of the closest center
-            // (Or black/white if we are using a trust image)
-            if (useTrust && closest == 0)
-            {
-                resultMatrix.at<Vec3b>(i, j) = colorMaj;
-            }
-            else if (useTrust && closest == 1)
-            {
-                resultMatrix.at<Vec3b>(i, j) = colorMin;
-            }
-            else
-            {
-                resultMatrix.at<Vec3b>(i, j) = Vec3b(centers.at<Vec3f>(closest)[0],
-                                                 centers.at<Vec3f>(closest)[1],
-                                                 centers.at<Vec3f>(closest)[2]);
-            }
-
-            // Increment counters for the quality evaluations
-            if (useTrust)
-            {
-                if (trustMatrix.at<Vec3b>(i, j) != resultMatrix.at<Vec3b>(i, j))
+                // Increment counters for the quality evaluations
+                if (useTrust)
                 {
-                    diffMatrix.at<Vec3b>(i, j) = trustMatrix.at<Vec3b>(i, j) == colorMaj ? red : blue;
-
-                    if (trustMatrix.at<Vec3b>(i, j) == colorMaj)
+                    if (trustMatrix.at<Vec3b>(i, j) != resultMatrix.at<Vec3b>(i, j))
                     {
-                        // False negative
-                        FN++;
+                        diffMatrix.at<Vec3b>(i, j) = trustMatrix.at<Vec3b>(i, j) == colorMaj ? red : blue;
+
+                        if (trustMatrix.at<Vec3b>(i, j) == colorMaj)
+                        {
+                            // False negative
+                            FN++;
+                        }
+                        else
+                        {
+                            // False positive
+                            FP++;
+                        }
                     }
                     else
                     {
-                        // False positive
-                        FP++;
-                    }
-                }
-                else
-                {
-                    if (trustMatrix.at<Vec3b>(i, j) == colorMaj)
-                    {
-                        // True positive
-                        TP++;
-                    }
-                    else
-                    {
-                        // True  negative
-                        TN++;
+                        if (trustMatrix.at<Vec3b>(i, j) == colorMaj)
+                        {
+                            // True positive
+                            TP++;
+                        }
+                        else
+                        {
+                            // True  negative
+                            TN++;
+                        }
                     }
                 }
             }
         }
+
+        // Trust comparison results
+        if (useTrust)
+        {
+            float P = TP / (TP + FP);
+            float S = TP / (TP + FN);
+            float DSC = 2 * TP / (2 * TP + FP + FN);
+
+            cout << endl
+                << "counters = " << endl
+                << " TP = " << TP << endl
+                << " TN = " << TN << endl
+                << " FP = " << FP << endl
+                << " FN = " << FN << endl
+                << " Total (debug) = " << (TP + TN + FP + FN) << endl
+                << endl
+                << " Precision = " << P << endl
+                << " Sensibility = " << S << endl
+                << " DICE Similarity Coefficient = " << DSC << endl;
+        }
     }
-
-    // Trust comparison results
-    if (useTrust)
+    else
     {
-        float P = TP / (TP + FP);
-        float S = TP / (TP + FN);
-        float DSC = 2 * TP / (2 * TP + FP + FN);
+        // Quality counters
+        vector<float> TP(k, 0);
+        vector<float> FP(k, 0);
+        vector<float> TN(k, 0);
+        vector<float> FN(k, 0);
 
-        cout << endl
-             << "counters = " << endl
-             << " TP = " << TP << endl
-             << " TN = " << TN << endl
-             << " FP = " << FP << endl
-             << " FN = " << FN << endl
-             << " Total (debug) = " << (TP + TN + FP + FN) << endl
-             << endl
-             << " Precision = " << P << endl
-             << " Sensibility = " << S << endl
-             << " DICE Similarity Coefficient = " << DSC << endl;
+        // Loop for each pixel
+        for (int i = 0; i < resultMatrix.rows; i++) {
+            for (int j = 0; j < resultMatrix.cols; j++) {
+                Vec3b color = sourceMatrix.at<Vec3b>(i, j);
+                int predictedClass = closestCenter(Vec3f(color[0], color[1], color[2]), centers);
+
+                // Set pixel color to the color of the closest center
+                resultMatrix.at<Vec3b>(i, j) = Vec3b(centers.at<Vec3f>(predictedClass)[0],
+                                                    centers.at<Vec3f>(predictedClass)[1],
+                                                    centers.at<Vec3f>(predictedClass)[2]);
+
+                if (useTrust) {
+                    Vec3b trueColor = trustMatrix.at<Vec3b>(i, j);
+                    int trueClass = closestCenter(Vec3f(trueColor[0], trueColor[1], trueColor[2]), centers);
+
+                    // Increment counters for the quality evaluations
+                    for (int c = 0; c < k; ++c) {
+                        if (predictedClass == c) {
+                            if (trueClass == c) {
+                                TP[c]++;
+                            } else {
+                                FP[c]++;
+                            }
+                        } else {
+                            if (trueClass == c) {
+                                FN[c]++;
+                            } else {
+                                TN[c]++;
+                            }
+                        }
+                    }
+
+                    // Update diffMatrix
+                    if (predictedClass != trueClass) {
+                        diffMatrix.at<Vec3b>(i, j) = (trueClass == 0) ? Vec3b(255, 0, 0) : Vec3b(0, 0, 255); // red for FN, blue for FP
+                    } else {
+                        diffMatrix.at<Vec3b>(i, j) = resultMatrix.at<Vec3b>(i, j); // same as the result for correctly classified
+                    }
+                }
+            }
+        }
+
+        // Trust comparison results
+        if (useTrust) {
+            vector<float> P(k), S(k), DSC(k);
+            for (int c = 0; c < k; ++c) {
+                P[c] = TP[c] / (TP[c] + FP[c]);
+                S[c] = TP[c] / (TP[c] + FN[c]);
+                DSC[c] = 2 * TP[c] / (2 * TP[c] + FP[c] + FN[c]);
+            }
+
+             cout << endl << "Confusion Matrix:" << endl;
+            cout << "\tPredicted Class" << endl;
+            cout << "\t";
+            for (int c = 0; c < k; ++c) {
+                cout << "Class " << c << "\t";
+            }
+            cout << endl;
+            for (int c = 0; c < k; ++c) {
+                cout << "Class " << c << "\t";
+                for (int c_pred = 0; c_pred < k; ++c_pred) {
+                    if (c == c_pred) {
+                        cout << TP[c] << "\t";
+                    } else {
+                        cout << FP[c_pred] << "\t";
+                    }
+                }
+                cout << endl;
+            }
+            float meanP = std::accumulate(P.begin(), P.end(), 0.0f) / k;
+            float meanS = std::accumulate(S.begin(), S.end(), 0.0f) / k;
+            float meanDSC = std::accumulate(DSC.begin(), DSC.end(), 0.0f) / k;
+
+            cout << endl
+                << " Mean Precision = " << meanP << endl
+                << " Mean Sensibility = " << meanS << endl
+                << " Mean DICE Similarity Coefficient = " << meanDSC << endl;
+
+            // Save the diffMatrix
+            imwrite("diffMatrix.png", diffMatrix);
+        }
     }
 
     // compute meanshift for the image
@@ -913,12 +1008,12 @@ int main(int argc, char **argv)
     //label.convertTo(msMatrixU, CV_8U);
 
     // Nom du fichier de sortie
-    //stringstream ss;
-    //ss << "kmeans_" << k << "_classes.png";
-    //string outputFile = ss.str();
+    stringstream ss;
+    ss << "kmeans_" << k << "_classes.png";
+    string outputFile = ss.str();
 
     // Enregistrer l'image binaire résultante
-    //imwrite(outputFile, resultMatrix);
+    imwrite(outputFile, resultMatrix);
 
     // create image windows
     namedWindow("Source", cv::WINDOW_AUTOSIZE);
@@ -946,7 +1041,7 @@ int main(int argc, char **argv)
     //while (waitKey(0) != 113);
 
     // compute superpixels for the image 
-    //waitKey(0);
+    waitKey(0);
     // Initialize variables for superpixel function
     Mat labels_sup, centers_sup;
     // Paramètres
@@ -954,7 +1049,7 @@ int main(int argc, char **argv)
     int k_sup=200;
 
     // Call the superpixel function
-    superpixel(sourceMatrix_sup, k_sup, m, 50, labels_sup, centers_sup);
+    //superpixel(sourceMatrix_sup, k_sup, m, 50, labels_sup, centers_sup);
 
 
 
